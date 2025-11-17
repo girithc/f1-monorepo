@@ -1,0 +1,18 @@
+{
+  "feature_order_api": [
+    "grid",
+    "pit_count",
+    "pit_total_duration",
+    "pit_avg_duration",
+    "first_pit_lap",
+    "last_pit_lap",
+    "circuit_overtake_difficulty",
+    "round",
+    "circuitId",
+    "country",
+    "carPerformanceIndex",
+    "avgTireScore"
+  ],
+  "target": "positionOrder",
+  "version": "v1.0.0"
+}
