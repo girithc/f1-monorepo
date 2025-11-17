@@ -7,7 +7,9 @@ import { useState, useEffect } from 'react';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
+  SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
 import Link from 'next/link';
@@ -48,10 +50,15 @@ export function SiteHeader() {
           </SheetTrigger>
           <SheetContent side="left">
             <SheetHeader>
-              <Link href="/" className="flex items-center gap-2 text-primary">
-                <ApexEdgeLogo className="w-8 h-8" />
-                <span className="font-headline text-2xl font-semibold">Apex Edge</span>
-              </Link>
+              <SheetTitle>
+                <Link href="/" className="flex items-center gap-2 text-primary">
+                  <ApexEdgeLogo className="w-8 h-8" />
+                  <span className="font-headline text-2xl font-semibold">Apex Edge</span>
+                </Link>
+              </SheetTitle>
+              <SheetDescription>
+                Navigate through the Apex Edge application features.
+              </SheetDescription>
             </SheetHeader>
             <div className="flex flex-col gap-2 py-4">
               {navItems.map((item) => (
