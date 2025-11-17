@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -30,7 +30,7 @@ export default function AdvisorPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  useState(() => {
+  useEffect(() => {
     getMetadata()
       .then((data) => setCircuits(data.circuits))
       .catch(() =>
@@ -40,7 +40,7 @@ export default function AdvisorPage() {
           description: 'Could not load circuit data. Please try again later.',
         })
       );
-  });
+  }, [toast]);
 
   const handleGetAdvice = async (data: any) => {
     const result = await getAIAdvice(data);
