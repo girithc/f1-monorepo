@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useForm, useFieldArray, FormProvider } from 'react-hook-form';
+import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -35,6 +35,7 @@ import type { CircuitMeta, CompareResponse, CompareScenario } from '@/lib/types'
 import { getMetadata, compare } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Trash2, Loader2, BarChart3 } from 'lucide-react';
+import { CompareResultsChart } from '@/components/charts/compare-results-chart';
 
 const scenarioSchema = predictRequestSchema.extend({
   id: z.string().min(1, 'ID is required'),
@@ -46,13 +47,8 @@ const formSchema = z.object({
 });
 type CompareFormData = z.infer<typeof formSchema>;
 
-function ScenarioForm({ index, remove }: { index: number, remove: (index: number) => void }) {
+function ScenarioForm({ index, remove, circuits }: { index: number, remove: (index: number) => void, circuits: CircuitMeta[] }) {
   const { control } = useFormContext<CompareFormData>();
-  const [circuits, setCircuits] = useState<CircuitMeta[]>([]);
-
-  useEffect(() => {
-    getMetadata().then((data) => setCircuits(data.circuits));
-  }, []);
 
   const { fields, append, remove: removePit } = useFieldArray({
     control,
@@ -126,8 +122,8 @@ function ScenarioForm({ index, remove }: { index: number, remove: (index: number
             </div>
             {fields.map((field, pitIndex) => (
                 <div key={field.id} className="flex items-start gap-2">
-                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.lap`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Lap" {...field} /></FormControl></FormItem>)} />
-                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.durationMs`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Duration (ms)" {...field} /></FormControl></FormItem>)} />
+                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.lap`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Lap" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
+                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.durationMs`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Duration (ms)" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
                     <Button type="button" variant="ghost" size="icon" onClick={() => removePit(pitIndex)} className="shrink-0"><Trash2 className="h-4 w-4" /></Button>
                 </div>
             ))}
@@ -141,7 +137,18 @@ export default function ComparePage() {
   const { toast } = useToast();
   const [results, setResults] = useState<CompareResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [circuits, setCircuits] = useState<CircuitMeta[]>([]);
 
+  useEffect(() => {
+    getMetadata()
+      .then((data) => setCircuits(data.circuits))
+      .catch(() => toast({
+        variant: "destructive",
+        title: "Error fetching metadata",
+        description: "Could not load circuit data. Please try again later.",
+      }));
+  }, [toast]);
+  
   const formMethods = useForm<CompareFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -152,7 +159,7 @@ export default function ComparePage() {
     },
   });
   
-  const { control, handleSubmit } = formMethods;
+  const { control, handleSubmit, watch } = formMethods;
   
   const { fields, append, remove } = useFieldArray({
     control,
@@ -163,7 +170,14 @@ export default function ComparePage() {
     setIsLoading(true);
     setResults(null);
     try {
-      const response = await compare({ scenarios: data.scenarios as CompareScenario[] });
+      // Ensure all numeric values are correctly typed before sending
+      const scenarios = data.scenarios.map(s => ({
+        ...s,
+        circuitId: Number(s.circuitId),
+        gridPosition: Number(s.gridPosition),
+        pitPlan: s.pitPlan.map(p => ({ lap: Number(p.lap), durationMs: Number(p.durationMs) })),
+      }));
+      const response = await compare({ scenarios: scenarios as CompareScenario[] });
       setResults(response);
     } catch (error) {
       toast({
@@ -176,6 +190,16 @@ export default function ComparePage() {
     }
   };
 
+  useEffect(() => {
+    if (circuits.length > 0 && formMethods.getValues('scenarios.0.circuitId') === '') {
+        const defaultCircuitId = String(circuits[0].circuitId);
+        formMethods.setValue('scenarios.0.circuitId', defaultCircuitId, { shouldValidate: true });
+        formMethods.setValue('scenarios.1.circuitId', defaultCircuitId, { shouldValidate: true });
+    }
+  }, [circuits, formMethods]);
+
+  const watchedScenarios = watch('scenarios');
+
   return (
     <FormProvider {...formMethods}>
       <div className="space-y-8">
@@ -187,47 +211,33 @@ export default function ComparePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {fields.map((field, index) => (
-                  <ScenarioForm key={field.id} index={index} remove={remove} />
-                ))}
-              </div>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <Button type="button" variant="outline" onClick={() => append({ id: `Strategy ${fields.length + 1}`, circuitId: '', gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, avgTireScore: 1.8, round: 12 })}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Scenario
-                </Button>
-                <Button type="submit" disabled={isLoading || fields.length < 2}>
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BarChart3 className="mr-2 h-4 w-4" />}
-                  Compare Scenarios
-                </Button>
-              </div>
-            </form>
+             {circuits.length > 0 ? (
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                  {fields.map((field, index) => (
+                    <ScenarioForm key={field.id} index={index} remove={remove} circuits={circuits}/>
+                  ))}
+                </div>
+                <div className="mt-6 flex flex-wrap gap-4">
+                  <Button type="button" variant="outline" onClick={() => append({ id: `Strategy ${fields.length + 1}`, circuitId: String(circuits[0].circuitId), gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, avgTireScore: 1.8, round: 12 })}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add Scenario
+                  </Button>
+                  <Button type="submit" disabled={isLoading || fields.length < 2}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BarChart3 className="mr-2 h-4 w-4" />}
+                    Compare Scenarios
+                  </Button>
+                </div>
+              </form>
+            ) : (
+               <div className="flex items-center justify-center h-40">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+               </div>
+            )}
           </CardContent>
         </Card>
         
         {results ? (
-           <Card>
-            <CardHeader>
-                <CardTitle>Comparison Results</CardTitle>
-                <CardDescription>Recommended Strategy: <span className='text-accent font-bold'>{results.recommendedScenarioId}</span></CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                 {results.results.map(res => (
-                    <Card key={res.scenarioId} className={res.scenarioId === results.recommendedScenarioId ? 'border-accent' : ''}>
-                        <CardHeader>
-                            <CardTitle>{res.scenarioId}</CardTitle>
-                        </CardHeader>
-                        <CardContent className='space-y-2 text-sm'>
-                            <p><strong>Median Finish:</strong> {res.finishP50.toFixed(2)}</p>
-                            <p><strong>Top 3 Probability:</strong> {(res.top3Probability * 100).toFixed(1)}%</p>
-                            <p><strong>Robustness Score:</strong> {res.robustnessScore.toFixed(2)}</p>
-                            <p><strong>Interval Width:</strong> {res.intervalWidth.toFixed(2)}</p>
-                        </CardContent>
-                    </Card>
-                 ))}
-            </CardContent>
-           </Card>
+           <CompareResultsChart results={results.results} recommendedScenarioId={results.recommendedScenarioId} />
         ) : (
           <Card className="flex flex-col items-center justify-center min-h-[200px] text-center">
             <CardHeader>
