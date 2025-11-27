@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field, validator
 from joblib import load
 import uvicorn
 import xgboost as xgb  # Required for DMatrix inside BoosterWrapper
+from lstm_runtime import load_lstm_model, predict_finish_from_history
+import subprocess
 
 # =====================================================
 # Config
@@ -110,6 +112,14 @@ class CompareResponse(BaseModel):
     recommendedScenarioId: str
     modelVersion: str
 
+class LstmPredictRequest(BaseModel):
+    raceId: int
+    driverId: int
+    currentLap: int
+
+class LstmPredictResponse(BaseModel):
+    finishP50: float
+
 # =====================================================
 # App init
 # =====================================================
@@ -134,6 +144,9 @@ class Artifacts:
     grid_feature_name: str = "grid"
 
 ART = Artifacts()
+LSTM_MODEL = None
+LSTM_DEVICE = None
+
 CIRCUIT_META: Dict[int, Dict[str, Any]] = {}
 NAME_TO_ID: Dict[str, int] = {}
 
@@ -229,19 +242,11 @@ def _startup():
     if not REGRESSOR_PATH.exists():
         raise RuntimeError(f"Regressor artifact not found: {REGRESSOR_PATH}")
     
-    # =========================================================
-    # ⚠️ PATCH: Fix Namespace Error for Pickle + Uvicorn ⚠️
-    # =========================================================
-    # When using uvicorn --reload, the main module is often named
-    # '__mp_main__', but the pickle file expects 'BoosterWrapper'
-    # to be in '__main__'. We must inject it into both.
-    # =========================================================
     import __main__
     setattr(__main__, "BoosterWrapper", BoosterWrapper)
 
     if "__mp_main__" in sys.modules:
         setattr(sys.modules["__mp_main__"], "BoosterWrapper", BoosterWrapper)
-    # =========================================================
 
     ART.regressor = load(REGRESSOR_PATH)
 
@@ -261,6 +266,8 @@ def _startup():
         print(f"Model expects features: {list(expected)}")
     except AttributeError:
         print("Could not retrieve feature names from preprocessor.")
+
+    print("Startup complete (XGBoost loaded, helpers ready)")
 
 # =====================================================
 # Request → Features
@@ -348,7 +355,7 @@ def _scenario_to_features(
     row = pd.DataFrame([base])
 
     row = _align_to_model_columns(row)
-    return row# =====================================================
+    return row
 # Post-processing
 # =====================================================
 def _squash_to_1_20(x: float, scale: float = SQUASH_SCALE, bias: float = SQUASH_BIAS) -> float:
@@ -541,6 +548,74 @@ def whatif(req: WhatIfRequest):
         "gridFeatureName": ART.grid_feature_name,
         "series": rows
     }
+
+# @app.post("/lstm/predict")
+# def lstm_predict(req: LstmPredictRequest):
+#     global LSTM_MODEL, LSTM_DEVICE
+#     if LSTM_MODEL is None or LSTM_DEVICE is None:
+#         try:
+#             LSTM_MODEL, LSTM_DEVICE = load_lstm_model()
+#             print("Loaded LSTM race-trajectory model (lazy)")
+#         except Exception as e:
+#             print("LSTM load failed:", e)
+#             raise HTTPException(status_code=500, detail=f"LSTM model load failed: {e}")
+    
+#     try:
+#         print(f"Received LSTM request: raceId={req.raceId}, driverId={req.driverId}, currentLap={req.currentLap}")
+#         pred = predict_finish_from_history(
+#             LSTM_MODEL,
+#             LSTM_DEVICE,
+#             race_id=req.raceId,
+#             driver_id=req.driverId,
+#             current_lap=req.currentLap,
+#         )
+#         print("LSTM prediction:", pred)
+#     except Exception as e:
+#         print("LSTM prediction error:", e)
+#         raise HTTPException(status_code=500, detail=f"LSTM prediction failed: {e}")
+    
+#     return {"finishP50": float(pred)}
+
+
+@app.post("/lstm/predict")
+def lstm_predict(req: LstmPredictRequest):
+    script_path = HERE / "lstm_cli.py"
+    if not script_path.exists():
+        raise HTTPException(status_code=500, detail="lstm_cli.py not found on server")
+
+    cmd = [
+        sys.executable,            # use the same Python as your venv
+        str(script_path),
+        "--raceId", str(req.raceId),
+        "--driverId", str(req.driverId),
+        "--currentLap", str(req.currentLap),
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        msg = e.stderr or e.stdout or str(e)
+        raise HTTPException(status_code=500, detail=f"LSTM subprocess failed: {msg}")
+
+    stdout = (result.stdout or "").strip()
+    if not stdout:
+        raise HTTPException(status_code=500, detail="LSTM subprocess returned empty output")
+
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Invalid JSON from LSTM subprocess: {stdout[:200]}",
+        )
+
+    return payload
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
