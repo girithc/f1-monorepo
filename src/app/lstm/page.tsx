@@ -33,7 +33,7 @@ export default function LstmPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/lstm/predict", {
+      const res = await fetch("https://f1-race-prediction-production.up.railway.app/lstm/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raceId: r, driverId: d, currentLap: lap }),
