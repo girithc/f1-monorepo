@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field, validator
 from joblib import load
 import uvicorn
 import xgboost as xgb  # Required for DMatrix inside BoosterWrapper
+# from lstm_runtime import load_lstm_model, predict_finish_from_history
+from server.strategy_api import app as strategy_app
 import subprocess
 
 # =====================================================
@@ -131,6 +133,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/strategy", strategy_app)
 
 # =====================================================
 # Artifacts + helpers
