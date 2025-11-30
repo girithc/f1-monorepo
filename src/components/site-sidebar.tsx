@@ -20,7 +20,7 @@ const navItems = [
   { href: '/compare', label: 'Compare', icon: BarChart3 },
   { href: '/whatif', label: 'What-If', icon: Variable },
   { href: '/advisor', label: 'AI Advisor', icon: Bot },
-    { href: '/lstm', label: 'LSTM Predictor', icon: Activity },  
+  { href: '/strategy', label: 'LSTM Predictor', icon: Activity },  
 
 ];
 

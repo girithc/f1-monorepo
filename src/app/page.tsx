@@ -98,7 +98,7 @@ export default async function DashboardPage() {
             <Link href="/advisor" className="flex items-center gap-2 hover:text-primary">
               <Bot size={16} /> AI Advisor
             </Link>
-            <Link href="/lstm" className="flex items-center gap-2 hover:text-primary">
+            <Link href="/strategy" className="flex items-center gap-2 hover:text-primary">
               <Activity size={16} /> In-Race LSTM Predictor
             </Link>
           </CardContent>
