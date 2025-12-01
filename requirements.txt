@@ -8,3 +8,5 @@ joblib
 shap
 python-dotenv
 orjson
+
+torch
