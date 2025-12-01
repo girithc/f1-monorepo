@@ -318,6 +318,44 @@ Y = Y[Y['n_finishers'] >= 16]
 # Restrict to modern era (Hybrid + DRS era)
 Y = Y[Y['year'] >= 2014]
 
+# =============================================================================
+# [FIX] Sanitize Pit Data for "Pure Strategy" Training
+# Goal: Train on what SHOULD happen (standard stops), not what DID happen (errors).
+# =============================================================================
+
+# 1. Calculate the Standard (Median) Pit Time for each Circuit
+#    This tells us the mathematical cost of a stop at Monaco vs Silverstone.
+circuit_pit_standards = (
+    pit_stops
+    .merge(races[['raceId', 'circuitId']], on='raceId')
+    .groupby('circuitId')['milliseconds']
+    .median()
+    .rename('std_pit_loss_ms')
+)
+
+# 2. Merge this standard time into your main dataset Y
+if 'std_pit_loss_ms' not in Y.columns:
+    Y = Y.merge(circuit_pit_standards, on='circuitId', how='left')
+
+# 3. Fill missing circuits with a global average (approx 22000ms)
+Y['std_pit_loss_ms'] = Y['std_pit_loss_ms'].fillna(22000)
+
+# 4. OVERWRITE the "Actual" columns with "Theoretical" columns
+#    Now, the model sees the STRATEGIC cost (Count * Standard Time)
+#    instead of the EXECUTION cost (Count * Random Mechanic Speed).
+
+# Fix the total duration (used in features)
+Y['pit_total_duration'] = Y['pit_count'] * Y['std_pit_loss_ms']
+
+# Fix the average duration (used in features)
+Y['pit_avg_duration']   = Y['std_pit_loss_ms']
+
+# Fix the duplicate column from tire_feats if it exists
+if 'avgPitMs' in Y.columns:
+    Y['avgPitMs'] = Y['std_pit_loss_ms']
+
+print("✅ Data Sanitized: Pit durations standardized to remove execution noise.")
+
 # =====================================================
 # 9. Train/valid split (grouped by year)
 # =====================================================
