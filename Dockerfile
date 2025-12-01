@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy your code
 COPY server ./server
+COPY data ./data
 COPY artifacts ./artifacts
 
 # Expose the port FastAPI will run on
