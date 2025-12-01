@@ -133,10 +133,12 @@ export default function StrategyPage() {
       { name: "Standard mid 1-stop", futurePits: [{ lap: "30", durationMs: "23000" }] },
       { name: "Super early 1-stop", futurePits: [{ lap: "22", durationMs: "23000" }] },
       { name: "Very late 1-stop", futurePits: [{ lap: "40", durationMs: "23000" }] },
-      { name: "Attack 2-stop", futurePits: [
-        { lap: "22", durationMs: "23000" },
-        { lap: "40", durationMs: "23000" }
-      ]},
+      {
+        name: "Attack 2-stop", futurePits: [
+          { lap: "22", durationMs: "23000" },
+          { lap: "40", durationMs: "23000" }
+        ]
+      },
     ]);
     setResult(null);
     setError(null);
@@ -154,10 +156,12 @@ export default function StrategyPage() {
     setScenarios([
       { name: "Emergency Stop Now", futurePits: [{ lap: "27", durationMs: "24000" }] },
       { name: "Push Through Pain", futurePits: [{ lap: "35", durationMs: "24000" }] },
-      { name: "Balanced 2-Stop", futurePits: [
-        { lap: "28", durationMs: "24000" },
-        { lap: "45", durationMs: "24000" }
-      ]},
+      {
+        name: "Balanced 2-Stop", futurePits: [
+          { lap: "28", durationMs: "24000" },
+          { lap: "45", durationMs: "24000" }
+        ]
+      },
       { name: "Gamble on Safety Car", futurePits: [{ lap: "40", durationMs: "24000" }] },
     ]);
     setResult(null);
@@ -215,11 +219,11 @@ export default function StrategyPage() {
       prev.map((s, i) =>
         i === scenIdx
           ? {
-              ...s,
-              futurePits: s.futurePits.map((p, j) =>
-                j === pitIdx ? { ...p, [field]: value } : p,
-              ),
-            }
+            ...s,
+            futurePits: s.futurePits.map((p, j) =>
+              j === pitIdx ? { ...p, [field]: value } : p,
+            ),
+          }
           : s,
       ),
     );
@@ -275,17 +279,17 @@ export default function StrategyPage() {
 
     setLoading(true);
     try {
-        const res = await fetch("http://127.0.0.1:8000/score", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grandPrix,
-            driverCode,
-            cutLap: cut,
-            history: historyClean,
-            scenarios: scenariosClean,
-          }),
-        });
+      const res = await fetch("https://captivating-emotion-production.up.railway.app/strategy/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grandPrix,
+          driverCode,
+          cutLap: cut,
+          history: historyClean,
+          scenarios: scenariosClean,
+        }),
+      });
 
 
       if (!res.ok) {
@@ -337,7 +341,7 @@ export default function StrategyPage() {
                   </Badge>
                 )}
               </div>
-              
+
               {/* Preset buttons */}
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -527,7 +531,7 @@ export default function StrategyPage() {
                             ✕
                           </Button>
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-slate-400">Pit Stops</span>
                           <Button
@@ -609,11 +613,10 @@ export default function StrategyPage() {
                       {result.allScenarios.map((sc, idx) => (
                         <div
                           key={idx}
-                          className={`rounded-lg border p-4 transition-all ${
-                            sc.name === result.bestScenario.name
+                          className={`rounded-lg border p-4 transition-all ${sc.name === result.bestScenario.name
                               ? "border-emerald-500/70 bg-emerald-500/10 shadow-lg shadow-emerald-500/20"
                               : "border-slate-700/50 bg-slate-800/30"
-                          }`}
+                            }`}
                         >
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <h4 className="text-lg font-semibold text-slate-50">{sc.name}</h4>
