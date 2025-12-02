@@ -21,7 +21,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from xgboost import XGBRegressor
+from xgboost import XGBRegressor, DMatrix, train as xgb_train
 import joblib
 
 # Candidate roots to search (current dir, parent, grandparent)
@@ -211,13 +211,6 @@ agg = (ps.groupby(['raceId','driverId'], as_index=False)
               first_pit_lap=('lap','min'),
               last_pit_lap=('lap','max')))
 
-def proxy_tire_score(nstops):
-    if pd.isna(nstops) or nstops == 0: return 1.5
-    if nstops == 1: return 2.0
-    if nstops == 2: return 2.4
-    return 2.7
-agg['avgTireScore'] = agg['pit_count'].apply(proxy_tire_score)
-
 # --- Tire strategy aggressiveness proxy ---
 agg['stints'] = (agg['pit_count'].fillna(0) + 1).clip(1, 5)
 agg['tire_aggr_index'] = agg['stints'] / agg['pit_total_duration'].replace(0, np.nan)
@@ -233,8 +226,9 @@ Y = Y.merge(agg, on=['raceId','driverId'], how='left')
 Y = Y.merge(season_cons_pts, on=['year','constructorId'], how='left')
 
 # Fill missing
-for c in ['pit_count','pit_total_duration','pit_avg_duration','first_pit_lap','last_pit_lap','avgTireScore']:
-    Y[c] = Y[c].fillna(0 if c!='avgTireScore' else 1.8)
+for c in ['pit_count','pit_total_duration','pit_avg_duration','first_pit_lap','last_pit_lap']:
+    Y[c] = Y[c].fillna(0)
+    
 Y['circuit_overtake_difficulty'] = Y['overtakeIndex'].fillna(Y['overtakeIndex'].median())
 Y['carPerformanceIndex'] = Y['carPerformanceIndex'].fillna(Y['carPerformanceIndex'].median())
 
@@ -251,10 +245,11 @@ Y = Y.merge(rounds_per_year, on='year', how='left')
 Y['season_progress'] = (Y['round'] - 1) / (Y['round_max'] - 1 + 1e-9)
 
 TARGET = 'positionOrder'
+# (Note: avgTireScore removed from FEATURES)
 FEATURES = [
  'grid','pit_count','pit_total_duration','pit_avg_duration',
  'first_pit_lap','last_pit_lap','circuit_overtake_difficulty',
- 'round','circuitId','country','carPerformanceIndex','avgTireScore',
+ 'round','circuitId','country','carPerformanceIndex',
  'season_progress','first_stop_delta', 'tire_aggr_index'
 ]
 dataset = Y[Y[TARGET] > 0][FEATURES + [TARGET]].copy()
@@ -359,8 +354,7 @@ print("✅ Data Sanitized: Pit durations standardized to remove execution noise.
 # =====================================================
 # 9. Train/valid split (grouped by year)
 # =====================================================
-from sklearn.model_selection import GroupShuffleSplit
-
+# (AvgTireScore removed from feature_cols)
 feature_cols = [
     "grid","pit_count","pit_total_duration","pit_avg_duration",
     "first_pit_lap","last_pit_lap",
@@ -382,14 +376,8 @@ X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
 y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
 
 # =====================================================
-# 10. Model: ColumnTransformer + xgb.train (MAE + early stopping on old xgboost)
+# 10. Model: ColumnTransformer + xgb.train (MAE + early stopping)
 # =====================================================
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from xgboost import DMatrix, train as xgb_train
-import xgboost as xgb
-import numpy as np
-
 numeric_features = [c for c in feature_cols if c not in ["country"]]
 categorical_features = [c for c in feature_cols if c in ["country"]]
 
@@ -409,9 +397,20 @@ X_valid_t = prep_fitted.transform(X_valid)
 dtrain = DMatrix(X_train_t, label=y_train.values)
 dvalid = DMatrix(X_valid_t, label=y_valid.values)
 
-# monotonicity: higher grid -> worse finish
-mono = [1 if col == "grid" else 0 for col in numeric_features]
-monotone_str = "(" + ",".join(str(v) for v in mono) + ")"
+# --- Define Monotonic Constraints ---
+# 1  = Increasing (Value UP -> Pos UP/Worse)
+# -1 = Decreasing (Value UP -> Pos DOWN/Better)
+# 0  = No constraint
+constraints = []
+for col in numeric_features:
+    if col == "grid":
+        constraints.append(1)   # P20 start -> P20 finish
+    elif col == "carPerformanceIndex":
+        constraints.append(-1)  # High Perf -> Low Finish (P1)
+    else:
+        constraints.append(0)
+
+monotone_str = "(" + ",".join(str(x) for x in constraints) + ")"
 
 params = {
     "objective": "reg:absoluteerror",  # MAE
@@ -450,9 +449,6 @@ class BoosterWrapper:
 # 'pipe' compatible object with .predict(X)
 pipe = BoosterWrapper(booster, prep_fitted)
 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import numpy as np
-
 # RAW features only — the wrapper/pipeline will transform internally
 pred_valid_raw = pipe.predict(X_valid)
 pred_valid = np.clip(pred_valid_raw, 1, 20)
@@ -465,10 +461,8 @@ baseline_grid = np.clip(X_valid["grid"].values, 1, 20)
 print("Baseline (finish≈grid) MAE:", mean_absolute_error(y_valid, baseline_grid))
 
 # =====================================================
-# Feature importances (works for Pipeline, XGBRegressor, or Booster)
+# Feature importances
 # =====================================================
-import numpy as np
-
 # 1) Identify model (Pipeline or raw Booster)
 mdl = None
 prep = None
@@ -490,14 +484,12 @@ try:
 except Exception:
     booster = getattr(mdl, "booster", None) or mdl  # sometimes it's already a Booster
 
-# 3) Importance dict (try several types)
+# 3) Importance dict
 imp = booster.get_score(importance_type="gain")
 if not imp:
     imp = booster.get_score(importance_type="weight")
 if not imp:
     imp = booster.get_score(importance_type="cover")
-if not imp:
-    raise ValueError("Booster returned empty importance dict. Make sure the model is fitted.")
 
 # 4) Feature names
 feat_names = None
@@ -508,12 +500,11 @@ if prep is not None:
         pass
 
 if feat_names is None:
-    # Infer count from keys (f0..fN-1), else fall back to length of dict
+    # Infer count from keys (f0..fN-1)
     try:
         max_idx = max(int(k[1:]) for k in imp.keys() if str(k).startswith("f") and str(k[1:]).isdigit())
         n_feats = max_idx + 1
     except Exception:
-        # last resort: if X_train is in scope and has a column count, use that
         if "X_train" in globals():
             n_feats = X_train.shape[1]
         else:
@@ -528,14 +519,14 @@ for k, v in imp.items():
         if 0 <= idx < len(scores):
             scores[idx] = float(v)
     else:
-        # sometimes keys are real feature names (rare with Booster)
+        # sometimes keys are real feature names
         try:
             idx = feat_names.index(k)
             scores[idx] = float(v)
         except ValueError:
             pass
 
-# Normalize for readability (optional)
+# Normalize for readability
 total = scores.sum()
 if total > 0:
     scores = scores / total
@@ -548,14 +539,7 @@ print("\nTop features:")
 for n, w in top:
     print(f"{n:40s} {w:.4f}")
 
-from sklearn.metrics import mean_absolute_error
-
-# Baseline 1: "finish = grid"
-baseline_grid_mae = mean_absolute_error(y_valid, X_valid['grid'])
-print("Baseline (finish=grid) MAE:", baseline_grid_mae)
-
-# Baseline 2: only car pace + overtake + circuit (very rough)
-import numpy as np
+# Baseline 2: only car pace + overtake + circuit
 pseudo = (
     21
     - 10 * X_valid['carPerformanceIndex'].fillna(0.5)
@@ -567,9 +551,6 @@ print("Pseudo baseline MAE:", mean_absolute_error(y_valid, pseudo))
 # =====================================================
 # 12. Save artifacts & helpers
 # =====================================================
-from joblib import dump
-import json
-
 ARTIFACTS_DIR = Path("./artifacts")
 ARTIFACTS_DIR.mkdir(exist_ok=True, parents=True)
 
@@ -583,6 +564,6 @@ with open(ARTIFACTS_DIR / "serve_schema.json", "w") as f:
     json.dump(serve_schema, f, indent=2)
 
 # save model (keep same filename if server expects it)
-dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb_v2.pkl")
-dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb.pkl")  # overwrite current for deployment
+joblib.dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb_v2.pkl")
+joblib.dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb.pkl")  # overwrite current for deployment
 print("Saved model + serve_schema.json")
