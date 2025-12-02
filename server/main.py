@@ -69,7 +69,7 @@ class PredictRequest(BaseModel):
     pitPlan: List[PitStop]
 
     carPerformanceIndex: Optional[float] = Field(None, ge=0.0, le=1.0)
-    avgTireScore: Optional[float] = Field(None, ge=0.0, le=3.0)
+
     round: Optional[int] = Field(None, ge=1, le=25)
 
     driverId: Optional[str] = None
@@ -97,7 +97,7 @@ class CompareScenario(BaseModel):
     gridPosition: int = Field(..., ge=1, le=20)
     pitPlan: List[PitStop]
     carPerformanceIndex: Optional[float] = Field(None, ge=0.0, le=1.0)
-    avgTireScore: Optional[float] = Field(None, ge=0.0, le=3.0)
+
     round: Optional[int] = Field(None, ge=1, le=25)
 
 class CompareRequest(BaseModel):
@@ -303,7 +303,7 @@ NUMERIC_DEFAULTS = {
     "last_pit_lap": 0,
     "round": ROUND_DEFAULT,
     "carPerformanceIndex": 0.5,
-    "avgTireScore": 1.8,
+
 }
 
 def _resolve_circuit_id(circuit_id: Union[int, str]) -> int:
@@ -345,7 +345,7 @@ def _scenario_to_features(
 
     round_val = int(round_override) if round_override is not None else NUMERIC_DEFAULTS["round"]
     car_pi    = float(car_perf) if car_perf is not None else NUMERIC_DEFAULTS["carPerformanceIndex"]
-    avg_tire_score = float(avg_tire) if avg_tire is not None else NUMERIC_DEFAULTS["avgTireScore"]
+
 
     grid_raw = max(1, min(20, int(grid)))
 
@@ -368,7 +368,7 @@ def _scenario_to_features(
         "circuitId": cid,
         "country": country,
         "carPerformanceIndex": car_pi,
-        "avgTireScore": avg_tire_score,
+
         "tireStints": tire_stints, 
         "avgPitMs": avg_pit_ms_val,
         "first_stop_delta": float(first_lap) / float(cmeta.get("avgLaps") or 60.0) if first_lap > 0 else 0.0,
@@ -415,10 +415,9 @@ def _predict_distribution(
     grid,
     pit_plan: List[PitStop],
     car_perf: Optional[float],
-    avg_tire: Optional[float],
     round_override: Optional[int],
 ):
-    X_row = _scenario_to_features(circuit_id, grid, pit_plan, car_perf, avg_tire, round_override)
+    X_row = _scenario_to_features(circuit_id, grid, pit_plan, car_perf, round_override)
 
     if DEBUG_PRED:
         print("\n--- DEBUG: Inference row ---")
@@ -582,7 +581,6 @@ def compare(req: CompareRequest):
             grid=sc.gridPosition,
             pit_plan=sc.pitPlan,
             car_perf=sc.carPerformanceIndex,
-            avg_tire=sc.avgTireScore,
             round_override=sc.round,
         )
         p50 = out["prediction"]["finishP50"]
@@ -619,27 +617,7 @@ def introspect():
         "feature_names_in_": list(map(str, names)) if names is not None else None
     }
 
-class WhatIfRequest(PredictRequest):
-    pass
 
-@app.post("/whatif")
-def whatif(req: WhatIfRequest):
-    rows = []
-    for g in range(1, 21):
-        out = _predict_distribution(
-            circuit_id=req.circuitId,
-            grid=g,
-            pit_plan=req.pitPlan,
-            car_perf=req.carPerformanceIndex,
-            avg_tire=req.avgTireScore,
-            round_override=req.round,
-        )
-        rows.append({"grid": g, "finishP50": out["prediction"]["finishP50"]})
-    return {
-        "modelVersion": MODEL_VERSION,
-        "gridFeatureName": ART.grid_feature_name,
-        "series": rows
-    }
 
 # @app.post("/lstm/predict")
 # def lstm_predict(req: LstmPredictRequest):
