@@ -563,6 +563,17 @@ serve_schema = {
 with open(ARTIFACTS_DIR / "serve_schema.json", "w") as f:
     json.dump(serve_schema, f, indent=2)
 
+try:
+    # Get feature names from the ColumnTransformer
+    # We need these to label the SHAP values correctly
+    feature_names_out = list(prep_fitted.get_feature_names_out())
+    
+    with open(ARTIFACTS_DIR / "model_feature_names.json", "w") as f:
+        json.dump(feature_names_out, f, indent=2)
+    print("Saved model_feature_names.json for SHAP explanation")
+except Exception as e:
+    print(f"Warning: Could not save feature names for SHAP: {e}")
+
 # save model (keep same filename if server expects it)
 joblib.dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb_v2.pkl")
 joblib.dump(pipe, ARTIFACTS_DIR / "finish_regressor_xgb.pkl")  # overwrite current for deployment

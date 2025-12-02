@@ -34,6 +34,8 @@ REGRESSOR_PATH = MODEL_DIR / "finish_regressor_xgb.pkl"
 CIRCUIT_LAPS_PATH = HERE / "helper" / "circuit_laps.json"
 OVERTAKE_INDEX_PATH = HERE / "helper" / "overtake_index.json"
 
+FEATURE_NAMES_PATH = MODEL_DIR / "model_feature_names.json"
+
 OVERTAKE_HIGHER_IS_EASIER = True
 
 DEBUG_PRED = os.getenv("DEBUG_PRED", "0") == "1"
@@ -79,7 +81,7 @@ class PredictRequest(BaseModel):
 class FeatureImpact(BaseModel):
     name: str
     impact: float
-    direction: Optional[str] = None
+    direction: str
 
 class PredictResponse(BaseModel):
     prediction: Dict[str, float]
@@ -141,6 +143,8 @@ app.mount("/strategy", strategy_app)
 @dataclass
 class Artifacts:
     regressor: Any = None
+    explainer: Any = None
+    feature_names: list = None
     circuit_laps: list = None
     overtake_difficulty: dict = None
     grid_feature_name: str = "grid"
@@ -270,6 +274,23 @@ def _startup():
         print("Could not retrieve feature names from preprocessor.")
 
     print("Startup complete (XGBoost loaded, helpers ready)")
+
+    try:
+        booster = ART.regressor.booster  # BoosterWrapper.booster from training :contentReference[oaicite:0]{index=0}
+
+        # Get preprocessed feature names from the ColumnTransformer
+        try:
+            ART.feature_names = list(ART.regressor.preprocessor.get_feature_names_out())
+        except Exception:
+            # Fallback: generic f0..fN-1
+            n_feats = booster.num_features()
+            print("Could not get feature names from preprocessor, using generic names.")
+            ART.feature_names = [f"f{i}" for i in range(n_feats)]
+
+        print("Feature names for contributions:", ART.feature_names[:10], "...")
+    except Exception as e:
+        print(f"Failed to prepare feature names for contributions: {e}")
+        ART.feature_names = None
 
 # =====================================================
 # Request → Features
@@ -438,6 +459,61 @@ def _robustness_score(p50: float, interval_width: float, top3_prob: float) -> fl
     rank_score = max(0.0, 1.0 - (p50 - 1.0) / 19.0)
     return float(0.4 * iw_score + 0.4 * top3_score + 0.2 * rank_score)
 
+
+def _get_shap_explanation(X_row: pd.DataFrame) -> Optional[List[Dict[str, Any]]]:
+    """
+    Use XGBoost's built-in Tree SHAP via pred_contribs=True.
+    Returns a list of feature impact dicts for a single row.
+    """
+    if ART.regressor is None:
+        return None
+
+    try:
+        booster = ART.regressor.booster
+
+        # 1. Transform to model space (same as at prediction time) :contentReference[oaicite:1]{index=1}
+        Xt = ART.regressor.preprocessor.transform(X_row)
+        dmat = xgb.DMatrix(Xt)
+
+        # 2. Get contributions (Tree SHAP) from XGBoost
+        #    Shape: (n_samples, n_features + 1) where last column is bias term
+        contribs = booster.predict(dmat, pred_contribs=True)
+        vals = contribs[0]  # single row
+        vals = vals[:-1]    # drop bias term
+
+        # 3. Names
+        feature_names = ART.feature_names
+        if not feature_names or len(feature_names) != len(vals):
+            feature_names = [f"feature_{i}" for i in range(len(vals))]
+
+        impacts: List[Dict[str, Any]] = []
+        for name, val in zip(feature_names, vals):
+            if abs(val) < 0.01:
+                continue  # ignore tiny effects
+
+            direction = "Worse Finish" if val > 0 else "Better Finish"
+
+            clean_name = (
+                str(name)
+                .replace("num__", "")
+                .replace("cat__", "")
+            )
+
+            impacts.append({
+                "name": clean_name,
+                "impact": float(val),
+                "direction": direction,
+            })
+
+        # Sort strongest first and keep top 10
+        impacts.sort(key=lambda x: abs(x["impact"]), reverse=True)
+        return impacts[:10]
+
+    except Exception as e:
+        print(f"Error calculating XGBoost SHAP contributions: {e}")
+        return None
+
+
 # =====================================================
 # Endpoints
 # =====================================================
@@ -474,12 +550,26 @@ def predict(req: PredictRequest):
         avg_tire=req.avgTireScore,
         round_override=req.round,
     )
+
+    # We need to regenerate X_row because _predict_distribution consumed it internally.
+    # Ideally, refactor _predict_distribution to return X_row, but for now we recreate it:
+    X_row_for_shap = _scenario_to_features(
+        circuit_id=req.circuitId,
+        grid=req.gridPosition,
+        pit_plan=req.pitPlan,
+        car_perf=req.carPerformanceIndex,
+        avg_tire=req.avgTireScore,
+        round_override=req.round,
+    )
+    
+    explanation_data = _get_shap_explanation(X_row_for_shap)
+    
     return {
         "prediction": out["prediction"],
         "top3": out["top3"],
         "positionProbs": out["positionProbs"],
         "perPitEffects": None,
-        "explanation": None,
+        "explanation": {"featureImpacts": explanation_data} if explanation_data else None,
         "modelVersion": MODEL_VERSION
     }
 
