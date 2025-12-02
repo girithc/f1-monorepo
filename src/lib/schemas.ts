@@ -10,7 +10,6 @@ export const predictRequestSchema = z.object({
   gridPosition: z.coerce.number().min(1).max(20),
   pitPlan: z.array(pitStopSchema),
   carPerformanceIndex: z.coerce.number().min(0).max(1),
-  avgTireScore: z.coerce.number().min(0).max(3),
   round: z.coerce.number().min(1).max(25),
 });
 
@@ -18,6 +17,5 @@ export const suggestPitStrategySchema = z.object({
   circuitId: z.coerce.number(),
   gridPosition: z.coerce.number().min(1).max(20),
   carPerformanceIndex: z.coerce.number().min(0).max(1),
-  avgTireScore: z.coerce.number().min(0).max(3),
   round: z.coerce.number().min(1).max(25),
 });
