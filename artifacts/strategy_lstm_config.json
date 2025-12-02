@@ -1,0 +1,12 @@
+{
+  "seq_input_dim": 9,
+  "static_dim": 3,
+  "plan_dim": 12,
+  "hidden_dim": 64,
+  "num_layers": 1,
+  "features": [
+    "grid",
+    "total_laps",
+    "cpi"
+  ]
+}
