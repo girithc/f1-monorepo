@@ -63,7 +63,6 @@ export default function PredictPage() {
       gridPosition: 10,
       pitPlan: [],
       carPerformanceIndex: 0.5,
-      avgTireScore: 1.8,
       round: 12,
     },
   });
@@ -132,20 +131,20 @@ export default function PredictPage() {
                       <span className="text-sm text-muted-foreground">{field.value}</span>
                     </div>
                     <FormControl>
-                       <Slider
-                          min={1}
-                          max={20}
-                          step={1}
-                          value={[field.value]}
-                          onValueChange={(vals) => field.onChange(vals[0])}
-                        />
+                      <Slider
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <PitStopInput control={form.control} />
-              
+
               <FormField
                 control={form.control}
                 name="carPerformanceIndex"
@@ -168,28 +167,8 @@ export default function PredictPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="avgTireScore"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex justify-between">
-                      <FormLabel>Average Tire Score</FormLabel>
-                      <span className="text-sm text-muted-foreground">{field.value.toFixed(2)}</span>
-                    </div>
-                    <FormControl>
-                      <Slider
-                        min={0}
-                        max={3}
-                        step={0.05}
-                        value={[field.value]}
-                        onValueChange={(vals) => field.onChange(vals[0])}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              
+
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Predict Finish Position
@@ -206,7 +185,7 @@ export default function PredictPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>P50 Finish</CardTitle>
-                   <CardDescription>Median</CardDescription>
+                  <CardDescription>Median</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-4xl font-bold">{prediction.prediction.finishP50.toFixed(1)}</p>
@@ -226,7 +205,7 @@ export default function PredictPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Top 3 Probability</CardTitle>
-                   <CardDescription>Podium Chance</CardDescription>
+                  <CardDescription>Podium Chance</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <p className="text-4xl font-bold">
