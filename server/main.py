@@ -322,6 +322,7 @@ def _scenario_to_features(
     grid: int,
     pit_plan: List[PitStop],
     car_perf: Optional[float],
+    avg_tire: Optional[float],
     round_override: Optional[int],
 ) -> pd.DataFrame:
     cid = _resolve_circuit_id(circuit_id)
@@ -349,6 +350,7 @@ def _scenario_to_features(
     grid_raw = max(1, min(20, int(grid)))
 
     tire_stints = pit_count + 1
+    avg_pit_ms_val = avg_ms 
 
     # Calculate season_progress (assuming roughly 22 races if not provided)
     # This ensures the feature exists and isn't always 0
@@ -368,6 +370,7 @@ def _scenario_to_features(
         "carPerformanceIndex": car_pi,
 
         "tireStints": tire_stints, 
+        "avgPitMs": avg_pit_ms_val,
         "first_stop_delta": float(first_lap) / float(cmeta.get("avgLaps") or 60.0) if first_lap > 0 else 0.0,
         "tire_aggr_index": (tire_stints / total_ms) if total_ms > 0 else 0.0,
         "season_progress": season_prog # <--- Added this
@@ -543,6 +546,7 @@ def predict(req: PredictRequest):
         grid=req.gridPosition,
         pit_plan=req.pitPlan,
         car_perf=req.carPerformanceIndex,
+        avg_tire=req.avgTireScore,
         round_override=req.round,
     )
 
@@ -553,6 +557,7 @@ def predict(req: PredictRequest):
         grid=req.gridPosition,
         pit_plan=req.pitPlan,
         car_perf=req.carPerformanceIndex,
+        avg_tire=req.avgTireScore,
         round_override=req.round,
     )
     
