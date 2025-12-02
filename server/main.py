@@ -322,7 +322,6 @@ def _scenario_to_features(
     grid: int,
     pit_plan: List[PitStop],
     car_perf: Optional[float],
-    avg_tire: Optional[float],
     round_override: Optional[int],
 ) -> pd.DataFrame:
     cid = _resolve_circuit_id(circuit_id)
@@ -546,7 +545,6 @@ def predict(req: PredictRequest):
         grid=req.gridPosition,
         pit_plan=req.pitPlan,
         car_perf=req.carPerformanceIndex,
-        avg_tire=req.avgTireScore,
         round_override=req.round,
     )
 
@@ -557,7 +555,6 @@ def predict(req: PredictRequest):
         grid=req.gridPosition,
         pit_plan=req.pitPlan,
         car_perf=req.carPerformanceIndex,
-        avg_tire=req.avgTireScore,
         round_override=req.round,
     )
     
