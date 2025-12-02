@@ -98,7 +98,7 @@ function ScenarioForm({ index, remove, circuits }: { index: number, remove: (ind
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={control}
           name={`scenarios.${index}.gridPosition`}
@@ -114,19 +114,19 @@ function ScenarioForm({ index, remove, circuits }: { index: number, remove: (ind
             </FormItem>
           )}
         />
-        
+
         <div className="space-y-2">
-            <div className='flex items-center justify-between'>
-                <FormLabel>Pit Plan</FormLabel>
-                <Button type="button" variant="ghost" size="sm" onClick={() => append({ lap: 0, durationMs: 23000 })}><PlusCircle className="mr-2 h-4 w-4" />Add Stop</Button>
+          <div className='flex items-center justify-between'>
+            <FormLabel>Pit Plan</FormLabel>
+            <Button type="button" variant="ghost" size="sm" onClick={() => append({ lap: 0, durationMs: 23000 })}><PlusCircle className="mr-2 h-4 w-4" />Add Stop</Button>
+          </div>
+          {fields.map((field, pitIndex) => (
+            <div key={field.id} className="flex items-start gap-2">
+              <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.lap`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Lap" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
+              <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.durationMs`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Duration (ms)" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
+              <Button type="button" variant="ghost" size="icon" onClick={() => removePit(pitIndex)} className="shrink-0"><Trash2 className="h-4 w-4" /></Button>
             </div>
-            {fields.map((field, pitIndex) => (
-                <div key={field.id} className="flex items-start gap-2">
-                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.lap`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Lap" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
-                    <FormField control={control} name={`scenarios.${index}.pitPlan.${pitIndex}.durationMs`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="number" placeholder="Duration (ms)" {...field} onChange={e => field.onChange(Number(e.target.value))} /></FormControl></FormItem>)} />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removePit(pitIndex)} className="shrink-0"><Trash2 className="h-4 w-4" /></Button>
-                </div>
-            ))}
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -148,19 +148,19 @@ export default function ComparePage() {
         description: "Could not load circuit data. Please try again later.",
       }));
   }, [toast]);
-  
+
   const formMethods = useForm<CompareFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       scenarios: [
-        { id: 'Strategy A', circuitId: '', gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, avgTireScore: 1.8, round: 12 },
-        { id: 'Strategy B', circuitId: '', gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, avgTireScore: 1.8, round: 12 },
+        { id: 'Strategy A', circuitId: '', gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, round: 12 },
+        { id: 'Strategy B', circuitId: '', gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, round: 12 },
       ],
     },
   });
-  
+
   const { control, handleSubmit, watch } = formMethods;
-  
+
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'scenarios',
@@ -192,9 +192,9 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (circuits.length > 0 && formMethods.getValues('scenarios.0.circuitId') === '') {
-        const defaultCircuitId = String(circuits[0].circuitId);
-        formMethods.setValue('scenarios.0.circuitId', defaultCircuitId, { shouldValidate: true });
-        formMethods.setValue('scenarios.1.circuitId', defaultCircuitId, { shouldValidate: true });
+      const defaultCircuitId = String(circuits[0].circuitId);
+      formMethods.setValue('scenarios.0.circuitId', defaultCircuitId, { shouldValidate: true });
+      formMethods.setValue('scenarios.1.circuitId', defaultCircuitId, { shouldValidate: true });
     }
   }, [circuits, formMethods]);
 
@@ -211,15 +211,15 @@ export default function ComparePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-             {circuits.length > 0 ? (
+            {circuits.length > 0 ? (
               <form onSubmit={handleSubmit(onSubmit)}>
                 <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
                   {fields.map((field, index) => (
-                    <ScenarioForm key={field.id} index={index} remove={remove} circuits={circuits}/>
+                    <ScenarioForm key={field.id} index={index} remove={remove} circuits={circuits} />
                   ))}
                 </div>
                 <div className="mt-6 flex flex-wrap gap-4">
-                  <Button type="button" variant="outline" onClick={() => append({ id: `Strategy ${fields.length + 1}`, circuitId: String(circuits[0].circuitId), gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, avgTireScore: 1.8, round: 12 })}>
+                  <Button type="button" variant="outline" onClick={() => append({ id: `Strategy ${fields.length + 1}`, circuitId: String(circuits[0].circuitId), gridPosition: 10, pitPlan: [], carPerformanceIndex: 0.5, round: 12 })}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Scenario
                   </Button>
                   <Button type="submit" disabled={isLoading || fields.length < 2}>
@@ -229,15 +229,15 @@ export default function ComparePage() {
                 </div>
               </form>
             ) : (
-               <div className="flex items-center justify-center h-40">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-               </div>
+              <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
             )}
           </CardContent>
         </Card>
-        
+
         {results ? (
-           <CompareResultsChart results={results.results} recommendedScenarioId={results.recommendedScenarioId} />
+          <CompareResultsChart results={results.results} recommendedScenarioId={results.recommendedScenarioId} />
         ) : (
           <Card className="flex flex-col items-center justify-center min-h-[200px] text-center">
             <CardHeader>

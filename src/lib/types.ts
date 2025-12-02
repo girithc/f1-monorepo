@@ -9,7 +9,6 @@ export type PredictRequest = {
   gridPosition: number; // 1..20
   pitPlan: PitStop[];
   carPerformanceIndex?: number; // 0..1
-  avgTireScore?: number; // 0..3
   round?: number; // 1..25
   driverId?: string;
 };
@@ -38,7 +37,6 @@ export type CompareScenario = {
   gridPosition: number;
   pitPlan: PitStop[];
   carPerformanceIndex?: number;
-  avgTireScore?: number;
   round?: number;
 };
 export type CompareRequest = { scenarios: CompareScenario[] };
