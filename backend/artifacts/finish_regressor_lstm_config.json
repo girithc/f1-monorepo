@@ -1,0 +1,8 @@
+{
+  "seq_input_dim": 9,
+  "static_dim": 2,
+  "plan_dim": 12,
+  "hidden_dim": 64,
+  "num_layers": 1,
+  "success_top_k": 10
+}
